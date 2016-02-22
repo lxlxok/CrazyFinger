@@ -16,15 +16,20 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.view.SurfaceView;
+import android.widget.ImageButton;
 
 import org.opencv.core.Core;
 import org.opencv.core.Mat;
 
 
+import org.opencv.core.MatOfPoint;
 import org.opencv.core.Point;
 import org.opencv.core.Scalar;
 import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class MainActivity extends Activity implements CvCameraViewListener2 {
 
@@ -40,6 +45,7 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
     private Mat matBin = null;
     private Mat matBinTmp = null;
     private Mat[] matSample = null;
+    private HandGesture handGesture = null;
 
     private Point[][] pointSample = null;
     private double[][] doubleColor = null;
@@ -161,6 +167,10 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
         if (matBinTmp == null) {
             matBinTmp = new Mat();
         }
+
+        if (handGesture == null) {
+            handGesture = new HandGesture();
+        }
     }
 
     public void onCameraViewStopped() {
@@ -179,7 +189,9 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
             sampleHand(matRgba);
         } else if (mode == DETECT_MODE) {
             binImgProcess(matInter, matBin);
-            return matBin;
+            makeContours();
+
+            return matRgba;
         }
 
         return matRgba;
@@ -287,6 +299,45 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 
         Imgproc.medianBlur(output, output, 3);
     }
+
+    public void makeContours() {
+        // find contours
+        handGesture.contours.clear();
+        Imgproc.findContours(matBin, handGesture.contours, handGesture.hie, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_NONE);
+        // find the convex hull object for each contour
+        handGesture.maxIndex = handGesture.findBiggestContours();
+
+        if (handGesture.maxIndex > -1) {
+            //handGesture.approximates.fromList(handGesture.contours.get(handGesture.maxIndex).toList());
+            //Imgproc.approxPolyDP(handGesture.approximates, handGesture.approximates, 2, true);
+
+            //Imgproc.drawContours(matRgba, handGesture.contours, handGesture.maxIndex, scalarRed, 3);
+            handGesture.bRect = Imgproc.boundingRect(handGesture.contours.get(handGesture.maxIndex));
+
+            Imgproc.convexHull(handGesture.contours.get(handGesture.maxIndex), handGesture.hullI, false);
+            handGesture.hullP.clear();
+            for (int i = 0; i < handGesture.contours.size(); i++) {
+                handGesture.hullP.add(new MatOfPoint());
+            }
+            int[] indexHull = handGesture.hullI.toArray();
+            List<Point> listPoint = new ArrayList<>();
+            Point[] maxContour = handGesture.contours.get(handGesture.maxIndex).toArray();
+            for (int i = 0; i < indexHull.length; i++) {
+                listPoint.add(maxContour[indexHull[i]]);
+            }
+            handGesture.hullP.get(handGesture.maxIndex).fromList(listPoint);
+            listPoint.clear();
+
+            if (handGesture.isHandDetection(matRgba)) {
+                Core.rectangle(matRgba, handGesture.bRect.tl(), handGesture.bRect.br(), scalarGreen, 4);
+                Imgproc.drawContours(matRgba, handGesture.hullP, handGesture.maxIndex, scalarBlue, 4);
+            }
+
+        }
+    }
+
+
+
 
 
 }
