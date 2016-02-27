@@ -9,7 +9,7 @@
         android:layout_width="match_parent"
         android:layout_height="fill_parent"
         android:visibility="gone"
-        android:id="@+id/HelloOpenCvView"
+        android:id="@+id/OpenCvMainView"
         opencv:show_fps="true"
         opencv:camera_id="front" />
 

@@ -2,13 +2,11 @@ package gitluck.com.crazyfinger;
 
 import android.app.Activity;
 import android.support.v4.view.MotionEventCompat;
-import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 
 import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
-import android.util.Log;
 import org.opencv.android.CameraBridgeViewBase;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
 
@@ -16,16 +14,17 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.view.SurfaceView;
-import android.widget.ImageButton;
 
 import org.opencv.core.Core;
+import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 
 
+import org.opencv.core.MatOfDouble;
 import org.opencv.core.MatOfPoint;
 import org.opencv.core.Point;
+import org.opencv.core.Rect;
 import org.opencv.core.Scalar;
-import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
 
 import java.util.ArrayList;
@@ -34,32 +33,24 @@ import java.util.List;
 public class MainActivity extends Activity implements CvCameraViewListener2 {
 
     private CameraBridgeViewBase mOpenCvCameraView;
-    private static final String TAG = "MainActivity";
-    private static final int SAMPLE_MODE = 1;
-    private static final int DETECT_MODE = 2;
+    private static final String TAG = "MainActivityTag";
+    private static final int SAMPLE_NUME = 10;
+
+    private Mat matRgba;
+    private Mat matBin;
+    private HandGesture handGesture;
 
 
-    private Mat matRgba = null;
-    private Mat matRgb = null;
-    private Mat matInter = null;
-    private Mat matBin = null;
-    private Mat matBinTmp = null;
-    private Mat[] matSample = null;
-    private HandGesture handGesture = null;
 
-    private Point[][] pointSample = null;
-    private double[][] doubleColor = null;
-    private int mode = SAMPLE_MODE;
+    private boolean handColorIsSampled = false;
 
     private static final Scalar scalarRed = new Scalar(255, 0, 0, 255);
     private static final Scalar scalarGreen = new Scalar(0, 255, 0, 255);
     private static final Scalar scalarBlue = new Scalar(0, 0, 255, 255);
 
-    private double[][] lowerBound = new double[7][3];
-    private double[][] upperBound = new double[7][3];
 
-    private Scalar lowerThreshold = new Scalar(0, 0, 0);
-    private Scalar upperThreshold = new Scalar(0, 0, 0);
+    private Scalar[] lowerThreshold = new Scalar[SAMPLE_NUME];
+    private Scalar[] upperThreshold = new Scalar[SAMPLE_NUME];
 
     private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
         @Override
@@ -67,18 +58,15 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
             switch (status) {
                 case LoaderCallbackInterface.SUCCESS:
                 {
-                    Log.i(TAG, "OpenCV loaded successfully");
                     mOpenCvCameraView.enableView();
-
                     mOpenCvCameraView.setOnTouchListener(new View.OnTouchListener() {
                         @Override
                         public boolean onTouch(View v, MotionEvent event) {
-                            int action = MotionEventCompat.getActionMasked(event);
-                            switch (action) {
+                            int activity = MotionEventCompat.getActionMasked(event);
+                            switch (activity) {
                                 case (MotionEvent.ACTION_DOWN) :
-                                    Log.i(TAG, "ACTION_DOWN");
-                                    if (mode == SAMPLE_MODE) {
-                                        mode = DETECT_MODE;
+                                    if (handColorIsSampled == false) {
+                                        handColorIsSampled = true;
                                     }
                                     return false;
                                 default:
@@ -99,25 +87,19 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        Log.i(TAG, "called onCreate");
         super.onCreate(savedInstanceState);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         setContentView(R.layout.activity_main);
-        mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.HelloOpenCvView);
+        mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.OpenCvMainView);
         mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
         mOpenCvCameraView.setCvCameraViewListener(this);
-        //setContentView(R.layout.activity_main);
 
-        //initial private data
-        pointSample = new Point[7][2];
-        for (int i = 0; i < 7; i++)  {
-            for (int j = 0; j < 2; j++) {
-                pointSample[i][j] = new Point();
-            }
+        // initialize global variable
+        for (int i = 0; i < SAMPLE_NUME; i++) {
+            lowerThreshold[i] = new Scalar(0,0,0);
+            upperThreshold[i] = new Scalar(0,0,0);
         }
 
-        doubleColor = new double[7][3];
-        initialBound(50, 50, 10, 10, 10, 10);
     }
 
     @Override
@@ -143,38 +125,14 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 
     @Override
     public void onCameraViewStarted(int width, int height) {
-        Log.i(TAG, "enter onCameraViewStarted");
+        matRgba = new Mat();
+        matBin = new Mat();
+        handGesture = new HandGesture();
 
-        if (matRgb == null) {
-            matRgb = new Mat();
-        }
-
-        if (matInter == null) {
-            matInter = new Mat();
-        }
-
-        if (matBin == null) {
-            matBin = new Mat();
-        }
-
-        if (matSample == null) {
-            matSample = new Mat[7];
-            for (int i = 0; i < 7; i++) {
-                matSample[i] = new Mat();
-            }
-        }
-
-        if (matBinTmp == null) {
-            matBinTmp = new Mat();
-        }
-
-        if (handGesture == null) {
-            handGesture = new HandGesture();
-        }
     }
 
     public void onCameraViewStopped() {
-        Log.i(TAG, "enter onCameraViewStopped");
+
     }
 
     @Override
@@ -182,162 +140,200 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 
         matRgba = inputFrame.rgba();
         Core.flip(matRgba, matRgba, 1);
-        Imgproc.GaussianBlur(matRgba, matRgba, new Size(5, 5), 5, 5);
-        Imgproc.cvtColor(matRgba, matRgb, Imgproc.COLOR_RGBA2BGR);
-        Imgproc.cvtColor(matRgba, matInter,Imgproc.COLOR_RGB2Lab);
-        if (mode == SAMPLE_MODE) {
-            sampleHand(matRgba);
-        } else if (mode == DETECT_MODE) {
-            binImgProcess(matInter, matBin);
-            makeContours();
 
-            return matRgba;
+        if (handColorIsSampled == false) {
+            sampleHand(matRgba, lowerThreshold, upperThreshold);
+        } else {
+            binImgProcess(matRgba, matBin);
+            produceContours(matBin);
         }
 
         return matRgba;
     }
 
-    public void sampleHand(Mat input) {
-        int rows = input.rows();
-        int cols = input.cols();
-        int windowsLen = rows/25;
 
-        pointSample[0][0].x = cols*13/24;
-        pointSample[0][0].y = rows*6/24;
+    public void sampleHand(Mat input, Scalar[] lowerThresholdOut, Scalar[] upperThresholdOut) {
+        Mat matHLS = new Mat();
+        Imgproc.cvtColor(input, matHLS, Imgproc.COLOR_RGB2HLS);
 
-        pointSample[1][0].x = cols*11/24;
-        pointSample[1][0].y = rows*10/24;
+        int rows = matHLS.rows();
+        int cols = matHLS.cols();
+        int windowsLen = rows / 30;
+        Point[][] pointSample = new Point[SAMPLE_NUME][2];
 
-        pointSample[2][0].x = cols*14/24;
-        pointSample[2][0].y = rows*10/24;
+        for (int i = 0; i < SAMPLE_NUME; i++) {
+            for (int j = 0; j < 2; j++) {
+                pointSample[i][j] = new Point();
+            }
+        }
 
-        pointSample[3][0].x = cols*13/24;
-        pointSample[3][0].y = rows*13/24;
 
-        pointSample[4][0].x = cols*17/24;
-        pointSample[4][0].y = rows*13/24;
+        pointSample[0][0].x = cols * 0.7;
+        pointSample[0][0].y = rows * 0.6;
 
-        pointSample[5][0].x = cols*17/24;
-        pointSample[5][0].y = rows*6/24;
+        pointSample[1][0].x = cols * 0.5;
+        pointSample[1][0].y = rows * 0.5;
 
-        pointSample[6][0].x = cols*17/24;
-        pointSample[6][0].y = rows*10/24;
+        pointSample[2][0].x = cols * 0.4;
+        pointSample[2][0].y = rows * 0.4;
 
-        for (int i = 0; i < 7; i++) {
+        pointSample[3][0].x = cols * 0.5;
+        pointSample[3][0].y = rows * 0.3;
+
+        pointSample[4][0].x = cols * 0.6;
+        pointSample[4][0].y = rows * 0.2;
+
+        pointSample[5][0].x = cols * 0.75;
+        pointSample[5][0].y = rows * 0.45;
+
+        pointSample[6][0].x = cols * 0.825;
+        pointSample[6][0].y = rows * 0.35;
+
+        pointSample[7][0].x = cols * 0.75;
+        pointSample[7][0].y = rows * 0.25;
+
+        pointSample[8][0].x = cols * 0.9;
+        pointSample[8][0].y = rows * 0.45;
+
+        pointSample[9][0].x = cols * 0.9;
+        pointSample[9][0].y = rows * 0.25;
+
+
+        for (int i = 0; i < SAMPLE_NUME; i++) {
             pointSample[i][1].x = pointSample[i][0].x + windowsLen;
             pointSample[i][1].y = pointSample[i][0].y + windowsLen;
         }
 
-        for (int i = 0; i < 7; i++) {
-            Core.rectangle(input, pointSample[i][0], pointSample[i][1], scalarGreen, 1);
+        // set the green rectangle to the camera view to help detect and sample hand color value
+        for (int i = 0; i < SAMPLE_NUME; i++) {
+            Core.rectangle(input, pointSample[i][0], pointSample[i][1], scalarGreen, 3);
 
         }
 
-        for (int i = 0; i < 7; i++) {
+        // sample the color value in the square
+        double[][] sampleColor = new double[SAMPLE_NUME][3];
+        for (int i = 0; i < SAMPLE_NUME; i++) {
             for (int j = 0; j < 3; j++) {
-                doubleColor[i][j] = (matInter.get((int)(pointSample[i][0].y + windowsLen / 2), (int)(pointSample[i][0].x)))[j]; // important
+                sampleColor[i][j] = averageColor(matHLS, pointSample[i][0], pointSample[i][1])[j];
             }
         }
-    }
 
-    public void binImgProcess(Mat input, Mat output) {
-        int cols = input.cols();
-        int rows = input.rows();
+        // the value of lowerBound and upperBound is refered from internet
 
-        bounderyLimit();
-        backgroundSubtract(input, matBinTmp);
-        matBinTmp.copyTo(output);
-    }
+        double[][] lowerBound = new double[SAMPLE_NUME][3];
+        double[][] upperBound = new double[SAMPLE_NUME][3];
 
-    public void initialBound(double l0, double h0, double l1, double h1, double l2, double h2) {
-        lowerBound[0][0] = l0;
-        lowerBound[0][1] = l1;
-        lowerBound[0][2] = l2;
-        upperBound[0][0] = h0;
-        upperBound[0][1] = h1;
-        upperBound[0][2] = h2;
-    }
+        lowerBound[0][0] = 12;
+        lowerBound[0][1] = 30;
+        lowerBound[0][2] = 80;
+        upperBound[0][0] = 7;
+        upperBound[0][1] = 40;
+        upperBound[0][2] = 80;
 
-    public void bounderyLimit() {
-
-        for (int i = 1; i < 7; i++) {
+        for (int i = 1; i < SAMPLE_NUME; i++) {
             for (int j = 0; j < 3; j++) {
                 lowerBound[i][j] = lowerBound[0][j];
                 upperBound[i][j] = upperBound[0][j];
             }
         }
 
-        for (int i = 0; i < 7; i++) {
-            for (int j = 0; j < 3; j++) {
-                if (doubleColor[i][j] - lowerBound[i][j] < 0) {
-                    lowerBound[i][j] = doubleColor[i][j];
-                }
 
-                if (doubleColor[i][j] + upperBound[i][j] > 255) {
-                    upperBound[i][j] = 255 - doubleColor[i][j];
+        // get the Threshold value for each sample point
+        for (int i = 0; i < SAMPLE_NUME; i++) {
+            for (int j = 0; j < 3; j++) {
+                if (sampleColor[i][j] - lowerBound[i][j] < 0) {
+                    lowerBound[i][j] = sampleColor[i][j];
+                }
+                if (sampleColor[i][j] + upperBound[i][j] > 255){
+                    upperBound[i][j] = 255 - sampleColor[i][j];
                 }
             }
+            lowerThresholdOut[i].set(new double[]{sampleColor[i][0] - lowerBound[i][0], sampleColor[i][1] - lowerBound[i][1], sampleColor[i][2] - lowerBound[i][2]});
+            upperThresholdOut[i].set(new double[]{sampleColor[i][0] + upperBound[i][0], sampleColor[i][1] + upperBound[i][1], sampleColor[i][2] + upperBound[i][2]});
+
         }
+
     }
 
-    public void backgroundSubtract(Mat input, Mat output) {
-        for (int i = 0; i < 7; i++) {
-            lowerThreshold.set(new double[]{doubleColor[i][0] - lowerBound[i][0], doubleColor[i][1] - lowerBound[i][1],
-            doubleColor[i][2] - lowerBound[i][2]});
-            upperThreshold.set(new double[]{doubleColor[i][0] + upperBound[i][0], doubleColor[i][1] + upperBound[i][1],
-            doubleColor[i][2] + upperBound[i][2]});
+    public double[] averageColor(Mat input, Point leftUp, Point rightDown) {
+        Mat matTemp = new Mat(input, new Rect(leftUp, rightDown));
+        MatOfDouble mean = new MatOfDouble();
+        MatOfDouble stdDv = new MatOfDouble();
+        Core.meanStdDev(matTemp, mean, stdDv);
+        return mean.toArray();
+    }
 
-            Core.inRange(input, lowerThreshold, upperThreshold, matSample[i]);
+
+    public void binImgProcess(Mat input, Mat output) {
+        Mat matHLS = new Mat();
+        Mat matHalf = new Mat();
+        Mat matTemp = new Mat();
+
+        Imgproc.pyrDown(input, matHalf);
+        Imgproc.cvtColor(matHalf, matHLS,Imgproc.COLOR_RGB2HLS);
+
+        Mat[] matSample = new Mat[SAMPLE_NUME];
+        for (int i = 0; i < SAMPLE_NUME; i++) {
+            matSample[i] = new Mat();
         }
 
-        output.release();
+        for (int i = 0; i < SAMPLE_NUME; i++) {
+
+            Core.inRange(matHLS, lowerThreshold[i], upperThreshold[i], matTemp);
+            matTemp.convertTo(matSample[i], CvType.CV_8U);
+        }
+
         matSample[0].copyTo(output);
 
-        for (int i = 1; i < 7; i++) {
+        for (int i = 1; i < SAMPLE_NUME; i++) {
             Core.add(output, matSample[i], output);
         }
 
-        Imgproc.medianBlur(output, output, 3);
+        Imgproc.medianBlur(output, output, 9);
+        Imgproc.pyrUp(output, output);
+
     }
 
-    public void makeContours() {
+
+    public void produceContours(Mat input) {
         // find contours
         handGesture.contours.clear();
-        Imgproc.findContours(matBin, handGesture.contours, handGesture.hie, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_NONE);
+        Imgproc.findContours(input, handGesture.contours, handGesture.hierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_NONE);
         // find the convex hull object for each contour
-        handGesture.maxIndex = handGesture.findBiggestContours();
+        handGesture.maxIndex = handGesture.indexOfLongestContours();
 
-        if (handGesture.maxIndex > -1) {
-            //handGesture.approximates.fromList(handGesture.contours.get(handGesture.maxIndex).toList());
-            //Imgproc.approxPolyDP(handGesture.approximates, handGesture.approximates, 2, true);
-
-            //Imgproc.drawContours(matRgba, handGesture.contours, handGesture.maxIndex, scalarRed, 3);
-            handGesture.bRect = Imgproc.boundingRect(handGesture.contours.get(handGesture.maxIndex));
-
-            Imgproc.convexHull(handGesture.contours.get(handGesture.maxIndex), handGesture.hullI, false);
-            handGesture.hullP.clear();
+        if (handGesture.maxIndex != -1 && handGesture.contours.size() > handGesture.maxIndex) {
+            handGesture.longestContours = handGesture.contours.get(handGesture.maxIndex);
+            handGesture.boundingRect = Imgproc.boundingRect(handGesture.longestContours);
+            Imgproc.convexHull(handGesture.longestContours, handGesture.intHull, false);
+            handGesture.pointHull.clear();
             for (int i = 0; i < handGesture.contours.size(); i++) {
-                handGesture.hullP.add(new MatOfPoint());
+                handGesture.pointHull.add(new MatOfPoint());
             }
-            int[] indexHull = handGesture.hullI.toArray();
-            List<Point> listPoint = new ArrayList<>();
-            Point[] maxContour = handGesture.contours.get(handGesture.maxIndex).toArray();
-            for (int i = 0; i < indexHull.length; i++) {
-                listPoint.add(maxContour[indexHull[i]]);
+            List<Point> contourPointLists = handGesture.longestContours.toList();
+            List<Integer> hullIntLists = handGesture.intHull.toList();
+            List<Point> hullPointLists = new ArrayList<Point>();
+            for (int i = 0; i < hullIntLists.size(); i++) {
+                hullPointLists.add(contourPointLists.get(hullIntLists.get(i)));
             }
-            handGesture.hullP.get(handGesture.maxIndex).fromList(listPoint);
-            listPoint.clear();
+            handGesture.pointHull.get(handGesture.maxIndex).fromList(hullPointLists);
+
+            if (handGesture.longestContours.toList().size() > 3) {
+                Imgproc.convexityDefects(handGesture.longestContours, handGesture.intHull, handGesture.convexityDefects);
+                handGesture.filterDefects();
+            }
 
             if (handGesture.isHandDetection(matRgba)) {
-                Core.rectangle(matRgba, handGesture.bRect.tl(), handGesture.bRect.br(), scalarGreen, 4);
-                Imgproc.drawContours(matRgba, handGesture.hullP, handGesture.maxIndex, scalarBlue, 4);
+                Core.rectangle(matRgba, handGesture.boundingRect.tl(), handGesture.boundingRect.br(), scalarGreen, 4);
+                Imgproc.drawContours(matRgba, handGesture.pointHull, handGesture.maxIndex, scalarBlue, 4);
+                //Imgproc.drawContours(matRgba, handGesture.contours, handGesture.maxIndex, scalarBlue, 6);
+                handGesture.drawDefects(matRgba, handGesture.longestContours, handGesture.convexityDefects);
+
+
             }
 
         }
     }
-
-
-
 
 
 }
