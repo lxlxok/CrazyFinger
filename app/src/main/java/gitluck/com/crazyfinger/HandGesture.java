@@ -68,7 +68,7 @@ public class HandGesture {
             if (fixedDepth > 150) {
                 Core.circle(input, pointStart, 20, new Scalar(255, 0, 0), 10);
                 Core.circle(input, pointEnd, 20, new Scalar(255, 0, 0), 10);
-                Core.circle(input, pointFarthest, 20, new Scalar(0, 255, 0), 10);
+              //  Core.circle(input, pointFarthest, 20, new Scalar(0, 255, 0), 10);
             }
         }
     }

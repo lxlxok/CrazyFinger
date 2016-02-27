@@ -14,6 +14,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.view.SurfaceView;
+import android.widget.ImageButton;
 
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
@@ -33,7 +34,6 @@ import java.util.List;
 public class MainActivity extends Activity implements CvCameraViewListener2 {
 
     private CameraBridgeViewBase mOpenCvCameraView;
-    private static final String TAG = "MainActivityTag";
     private static final int SAMPLE_NUME = 10;
 
     private Mat matRgba;
@@ -145,10 +145,17 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
             sampleHand(matRgba, lowerThreshold, upperThreshold);
         } else {
             binImgProcess(matRgba, matBin);
-            produceContours(matBin);
+            Mat matBincopy = new Mat();
+            matBin.copyTo(matBincopy);
+            produceContours(matBin, matRgba);
+            Imgproc.pyrDown(matBincopy, matBincopy);
+            Imgproc.pyrDown(matBincopy, matBincopy);
+            Imgproc.cvtColor(matBincopy, matBincopy, Imgproc.COLOR_GRAY2RGBA);
+            matBincopy.copyTo(matRgba.submat(0, matBincopy.rows(), 0, matBincopy.cols()));
         }
 
         return matRgba;
+
     }
 
 
@@ -279,8 +286,9 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 
         for (int i = 0; i < SAMPLE_NUME; i++) {
 
-            Core.inRange(matHLS, lowerThreshold[i], upperThreshold[i], matTemp);
-            matTemp.convertTo(matSample[i], CvType.CV_8U);
+            Core.inRange(matHLS, lowerThreshold[i], upperThreshold[i], matSample[i]);
+            //Core.inRange(matHLS, lowerThreshold[i], upperThreshold[i], matTemp);
+            //matTemp.convertTo(matSample[i], CvType.CV_8U);
         }
 
         matSample[0].copyTo(output);
@@ -289,13 +297,13 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
             Core.add(output, matSample[i], output);
         }
 
-        Imgproc.medianBlur(output, output, 9);
+        Imgproc.medianBlur(output, output, 3);
         Imgproc.pyrUp(output, output);
 
     }
 
 
-    public void produceContours(Mat input) {
+    public void produceContours(Mat input, Mat output) {
         // find contours
         handGesture.contours.clear();
         Imgproc.findContours(input, handGesture.contours, handGesture.hierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_NONE);
@@ -323,11 +331,11 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
                 handGesture.filterDefects();
             }
 
-            if (handGesture.isHandDetection(matRgba)) {
-                Core.rectangle(matRgba, handGesture.boundingRect.tl(), handGesture.boundingRect.br(), scalarGreen, 4);
-                Imgproc.drawContours(matRgba, handGesture.pointHull, handGesture.maxIndex, scalarBlue, 4);
-                //Imgproc.drawContours(matRgba, handGesture.contours, handGesture.maxIndex, scalarBlue, 6);
-                handGesture.drawDefects(matRgba, handGesture.longestContours, handGesture.convexityDefects);
+            if (handGesture.isHandDetection(output)) {
+                Core.rectangle(output, handGesture.boundingRect.tl(), handGesture.boundingRect.br(), scalarGreen, 4);
+                Imgproc.drawContours(output, handGesture.pointHull, handGesture.maxIndex, scalarBlue, 4);
+                //Imgproc.drawContours(output, handGesture.contours, handGesture.maxIndex, scalarBlue, 6);
+                handGesture.drawDefects(output, handGesture.longestContours, handGesture.convexityDefects);
 
 
             }
